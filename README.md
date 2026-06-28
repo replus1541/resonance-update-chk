@@ -1,8 +1,8 @@
 # Resonance Update Check
 
-RES 공식 네이버 라운지와 YouTube 채널을 GitHub Actions에서 주기적으로 확인하고, 새 항목이 있으면 Discord Webhook으로 알립니다.
+RES 공식 네이버 라운지와 YouTube 채널을 GitHub Actions에서 주기적으로 확인하고, 새 항목이 있으면 기존 Discord Bot으로 지정 채널에 알립니다.
 
-이 프로젝트는 public repository의 GitHub-hosted runner에서 배치로 실행하는 구조입니다. `X`, `WEIBO`, `Playwright`, 상시 서버, Discord Gateway Bot은 사용하지 않습니다.
+이 프로젝트는 public repository의 GitHub-hosted runner에서 배치로 실행하는 구조입니다. `X`, `WEIBO`, `Playwright`, 상시 서버, Discord Gateway Bot slash command는 사용하지 않습니다.
 
 ## 대상
 
@@ -13,10 +13,11 @@ YouTube 공식 버튼 링크 `https://rzns-kr.onelink.me/6iYR/a2lrqem1`는 2026-
 
 ## 실행
 
-GitHub repository secret에 Discord Webhook URL을 저장합니다.
+GitHub repository secret에 기존 Discord Bot Token과 알림 받을 채널 ID를 저장합니다.
 
 ```text
-DISCORD_WEBHOOK_URL
+DISCORD_BOT_TOKEN
+DISCORD_CHANNEL_ID
 ```
 
 GitHub Actions의 `Check RES updates` workflow가 자동 실행됩니다.
@@ -24,7 +25,7 @@ GitHub Actions의 `Check RES updates` workflow가 자동 실행됩니다.
 - 네이버 라운지: 5분마다 실행
 - YouTube: 30분마다 실행
 - 첫 실행: baseline 저장만 수행하고 알림은 보내지 않음
-- 이후 실행: `data/state.json`에 없는 신규 항목만 Discord Webhook으로 전송
+- 이후 실행: `data/state.json`에 없는 신규 항목만 기존 Discord Bot으로 전송
 
 ## 로컬 테스트
 
@@ -41,8 +42,8 @@ npm.cmd run verify
 
 ## 주요 환경변수
 
-- `DISCORD_WEBHOOK_URL`: 알림을 보낼 Discord Webhook URL입니다.
-- `DISCORD_USERNAME`: Discord Webhook 표시 이름입니다.
+- `DISCORD_BOT_TOKEN`: 메시지를 보낼 기존 Discord Bot Token입니다.
+- `DISCORD_CHANNEL_ID`: 알림을 받을 Discord 채널 ID입니다.
 - `COLLECTOR_USER_AGENT`: 수집 요청에 사용할 User-Agent입니다.
 - `HTTP_TIMEOUT_MS`: HTTP 요청 timeout입니다.
 - `MAX_PAGES`: source별 최대 페이지 확인 수입니다.
@@ -61,4 +62,4 @@ npm.cmd run verify
 - GitHub Actions schedule은 정확한 실행 시각을 보장하지 않습니다.
 - GitHub의 부하 상황에 따라 지연되거나 일부 실행이 누락될 수 있습니다.
 - YouTube RSS가 비어 있거나 접근 실패하면 채널 `/videos` HTML fallback을 사용합니다.
-- 실시간 slash command, `/latest`, `/res-status` 같은 Discord Bot 기능은 이 구조에서 사용하지 않습니다.
+- 실시간 slash command, `/latest`, `/res-status` 같은 Discord Bot Gateway 기능은 이 구조에서 사용하지 않습니다.
