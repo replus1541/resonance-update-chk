@@ -10,6 +10,10 @@ on:
         description: "Comma-separated sources, e.g. NAVER_LOUNGE,YOUTUBE"
         required: false
         default: "NAVER_LOUNGE,YOUTUBE"
+      send_test_notification:
+        description: "Send one synthetic Discord bot notification and skip collection"
+        required: false
+        default: "false"
 
 concurrency:
   group: resonance-update-check
@@ -41,9 +45,16 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run check:updates
+      - name: Send test notification
+        if: ${{ github.event.inputs.send_test_notification == 'true' }}
+        run: npm run test:notify
+
+      - name: Check updates
+        if: ${{ github.event.inputs.send_test_notification != 'true' }}
+        run: npm run check:updates
 
       - name: Commit state
+        if: ${{ github.event.inputs.send_test_notification != 'true' }}
         run: |
           if git diff --quiet -- data/state.json; then
             echo "No state changes."

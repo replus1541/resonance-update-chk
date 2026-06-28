@@ -40,6 +40,10 @@ npm.cmd run verify
 
 `DRY_RUN=true`이면 Discord로 전송하지 않고 수집과 중복 판정만 확인합니다.
 
+## 알림 전송 테스트
+
+GitHub Actions의 `Check RES updates` workflow를 수동 실행하면서 `send_test_notification` 값을 `true`로 지정하면, 실제 수집과 `data/state.json` 변경 없이 가상 신규 게시글 알림 1건을 기존 Discord Bot으로 전송합니다.
+
 ## 주요 환경변수
 
 - `DISCORD_BOT_TOKEN`: 메시지를 보낼 기존 Discord Bot Token입니다.
