@@ -137,7 +137,8 @@ async function getRssUrl() {
       accept: 'text/html,application/xhtml+xml'
     }
   });
-  const rssUrl = html.match(/"rssUrl":"([^"]+)"/)?.[1]?.replace(/\\u0026/g, '&');
+  const rssUrlValue = html.match(/"rssUrl":"([^"]+)"/)?.[1];
+  const rssUrl = rssUrlValue ? decodeJsonString(rssUrlValue) : null;
   if (rssUrl) {
     cachedRssUrl = rssUrl;
     return cachedRssUrl;
