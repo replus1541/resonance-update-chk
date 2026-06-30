@@ -123,7 +123,7 @@ async function fetchYouTubeVideosFallback(cause) {
       }
     });
   }));
-  logYouTubeMetadata('html-fallback', items);
+  logYouTubeMetadata('html-fallback', items, cause);
   return {
     items,
     nextCursor: null
@@ -216,12 +216,19 @@ function getThumbnailUrl(value) {
   return null;
 }
 
-function logYouTubeMetadata(parserUsed, items) {
+function logYouTubeMetadata(parserUsed, items, cause = null) {
   const item = items[0] || null;
   const titlePresent = Boolean(item?.title && !/^\d+$/.test(item.title));
   const publishedAtPresent = Boolean(item?.publishedAt);
   const descriptionLength = item?.summary?.length || 0;
-  console.log(`YOUTUBE metadata parserUsed=${parserUsed} titlePresent=${titlePresent} publishedAtPresent=${publishedAtPresent} descriptionLength=${descriptionLength}`);
+  const rssError = cause ? ` rssError=${compactLogValue(cause.message)}` : '';
+  console.log(`YOUTUBE metadata parserUsed=${parserUsed} titlePresent=${titlePresent} publishedAtPresent=${publishedAtPresent} descriptionLength=${descriptionLength}${rssError}`);
+}
+
+function compactLogValue(value) {
+  return String(value || '')
+    .replace(/\s+/g, '_')
+    .slice(0, 180);
 }
 
 function normalizeDate(value) {
