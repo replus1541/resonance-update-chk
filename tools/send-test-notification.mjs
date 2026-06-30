@@ -7,8 +7,8 @@ const item = makeFeedItem({
   sourceItemId: `test-${Date.now()}`,
   type: 'post',
   category: '테스트',
-  title: '[테스트] RES 업데이트 알림 전송 확인',
-  summary: 'GitHub Actions와 기존 Discord Bot Token으로 알림이 정상 전송되는지 확인하는 가상 신규 게시글입니다.',
+  title: '[TEST] RES 업데이트 알림 전송 확인',
+  summary: 'GitHub Actions workflow_dispatch test_notify=true 실행으로 전송한 테스트 알림입니다.',
   url: 'https://github.com/replus1541/resonance-update-chk/actions',
   publishedAt: new Date().toISOString(),
   author: 'RES Update Monitor'

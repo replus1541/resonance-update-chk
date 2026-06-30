@@ -6,7 +6,8 @@ import { fetchYouTubePage } from '../src/collectors/youtube.js';
 import { collectUntilKnown, sortOldestFirst } from '../src/collectors/common.js';
 import { notifyDiscord } from '../src/notifier/discord.js';
 
-const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const THIS_FILE = fileURLToPath(import.meta.url);
+const ROOT_DIR = path.resolve(path.dirname(THIS_FILE), '..');
 const DEFAULT_STATE_PATH = path.join(ROOT_DIR, 'data', 'state.json');
 const STATE_PATH = path.resolve(process.env.STATE_PATH || DEFAULT_STATE_PATH);
 const MAX_KNOWN_ITEMS_PER_SOURCE = Number.parseInt(process.env.MAX_KNOWN_ITEMS_PER_SOURCE || '300', 10);
@@ -64,30 +65,55 @@ async function collectSource(state, source) {
   try {
     const result = await collectUntilKnown(source, fetchPage, db);
     const orderedItems = sortOldestFirst(result.items);
-    const baseline = !sourceState.baselineDone;
-    const notifications = [];
-
-    if (!baseline) {
-      for (const item of orderedItems) {
-        notifications.push(await notify(item));
-      }
-    }
-
-    rememberItems(sourceState, orderedItems);
-    sourceState.baselineDone = true;
+    const processed = await processCollectedItems(sourceState, orderedItems);
 
     return {
       source,
-      ok: true,
-      baseline,
+      ok: processed.ok,
+      error: processed.error,
+      baseline: processed.baseline,
       newCount: orderedItems.length,
+      rememberedCount: processed.rememberedCount,
       pageCount: result.pageCount,
       stopReason: result.stopReason,
-      notifications
+      notifications: processed.notifications
     };
   } catch (error) {
     return { source, ok: false, error: error.message };
   }
+}
+
+export async function processCollectedItems(sourceState, orderedItems, options = {}) {
+  const notifyItem = options.notifyItem || notify;
+  const baseline = !sourceState.baselineDone;
+  const notifications = [];
+  const deliveredItems = [];
+  let failedNotification = null;
+
+  if (!baseline) {
+    for (const item of orderedItems) {
+      const notification = await notifyItem(item);
+      notifications.push(notification);
+      if (notification.sent || notification.reason === 'dry-run') {
+        deliveredItems.push(item);
+        continue;
+      }
+      failedNotification = notification;
+      break;
+    }
+  }
+
+  const rememberedItems = baseline ? orderedItems : deliveredItems;
+  rememberItems(sourceState, rememberedItems);
+  sourceState.baselineDone = true;
+
+  return {
+    ok: !failedNotification,
+    error: failedNotification ? `notification failed for ${failedNotification.id}: ${failedNotification.error || failedNotification.reason || 'unknown error'}` : undefined,
+    baseline,
+    rememberedCount: rememberedItems.length,
+    notifications
+  };
 }
 
 async function notify(item) {
@@ -154,23 +180,27 @@ function parseArgs(args) {
 }
 
 function formatResult(result) {
-  if (!result.ok) return `${result.source}: failed: ${result.error}`;
   const sent = result.notifications?.filter((item) => item.sent).length || 0;
-  return [
-    `${result.source}: ok`,
+  const parts = [
+    `${result.source}: ${result.ok ? 'ok' : 'failed'}`,
     `baseline=${result.baseline}`,
     `new=${result.newCount}`,
+    `remembered=${result.rememberedCount ?? 0}`,
     `pages=${result.pageCount}`,
     `stop=${result.stopReason}`,
     `sent=${sent}`
-  ].join(' ');
+  ];
+  if (result.error) parts.push(`error=${result.error}`);
+  return parts.join(' ');
 }
 
 function isTruthy(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === THIS_FILE) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

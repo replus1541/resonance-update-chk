@@ -1,0 +1,17 @@
+name = "resonance-cron"
+main = "cloudflare/cron-dispatcher.js"
+compatibility_date = "2026-06-30"
+
+[triggers]
+crons = [
+  "3 23 * * *",
+  "3,13,23,33,43,53 1-7 * * *",
+  "3,13,23,33,43,53 9-16 * * *"
+]
+
+[vars]
+GITHUB_OWNER = "replus1541"
+GITHUB_REPO = "resonance-update-chk"
+GITHUB_WORKFLOW_ID = "check-updates.yml"
+GITHUB_REF = "main"
+DEFAULT_SOURCES = "NAVER_LOUNGE,YOUTUBE"

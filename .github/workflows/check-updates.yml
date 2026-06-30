@@ -1,17 +1,25 @@
 name: Check RES updates
 
 on:
+  push:
+    branches:
+      - main
   schedule:
-    - cron: "3/5 * * * *"
-    - cron: "17,47 * * * *"
+    - cron: "3 23 * * *"
+    - cron: "3,13,23,33,43,53 1-7 * * *"
+    - cron: "3,13,23,33,43,53 9-16 * * *"
   workflow_dispatch:
     inputs:
       sources:
         description: "Comma-separated sources, e.g. NAVER_LOUNGE,YOUTUBE"
         required: false
         default: "NAVER_LOUNGE,YOUTUBE"
+      test_notify:
+        description: "Send one [TEST] Discord notification and skip collection/state updates"
+        required: false
+        default: "false"
       send_test_notification:
-        description: "Send one synthetic Discord bot notification and skip collection"
+        description: "Legacy alias for test_notify"
         required: false
         default: "false"
 
@@ -31,8 +39,7 @@ jobs:
       ENABLE_PLAYWRIGHT_FALLBACK: "false"
       ENABLE_X_COLLECTOR: "false"
       ENABLE_WEIBO_COLLECTOR: "false"
-      GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
-      SOURCES: ${{ github.event.inputs.sources }}
+      SOURCES: ${{ github.event.inputs.sources || 'NAVER_LOUNGE,YOUTUBE' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,16 +52,19 @@ jobs:
 
       - run: npm ci
 
+      - name: Verify
+        run: npm run verify
+
       - name: Send test notification
-        if: ${{ github.event.inputs.send_test_notification == 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.test_notify == 'true' || github.event.inputs.send_test_notification == 'true') }}
         run: npm run test:notify
 
       - name: Check updates
-        if: ${{ github.event.inputs.send_test_notification != 'true' }}
+        if: ${{ github.event_name != 'push' && !(github.event_name == 'workflow_dispatch' && (github.event.inputs.test_notify == 'true' || github.event.inputs.send_test_notification == 'true')) }}
         run: npm run check:updates
 
       - name: Commit state
-        if: ${{ github.event.inputs.send_test_notification != 'true' }}
+        if: ${{ always() && github.event_name != 'push' && !(github.event_name == 'workflow_dispatch' && (github.event.inputs.test_notify == 'true' || github.event.inputs.send_test_notification == 'true')) }}
         run: |
           if git diff --quiet -- data/state.json; then
             echo "No state changes."
