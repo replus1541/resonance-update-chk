@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { XMLParser } from 'fast-xml-parser';
-import { normalizeYouTubeRssEntry } from '../src/collectors/youtube.js';
+import { normalizeRelativeDate, normalizeYouTubeRssEntry } from '../src/collectors/youtube.js';
 import { toDiscordEmbed } from '../src/notifier/discord-embed.js';
 
 const rss = `<?xml version="1.0" encoding="UTF-8"?>
@@ -53,5 +53,10 @@ assert.deepEqual(embed.fields.find((field) => field.name === '작성일'), {
   inline: false
 });
 assert.equal(embed.url, 'https://www.youtube.com/watch?v=abc123');
+
+assert.equal(
+  normalizeRelativeDate('7 minutes ago', new Date('2026-06-30T04:45:00.000Z')),
+  '2026-06-30T04:38:00.000Z'
+);
 
 console.log('verify-youtube-rss-fixture: ok');

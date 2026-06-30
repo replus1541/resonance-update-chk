@@ -93,7 +93,7 @@ async function fetchYouTubeVideosFallback(cause) {
     const watchMeta = await fetchWatchPageMeta(videoId);
     const title = compactTitle(firstUsableText(watchMeta.title, video.title), `YouTube video ${videoId}`);
     const fallbackDescription = stripHtml(watchMeta.description || video.description || '');
-    const publishedAt = normalizeDate(watchMeta.publishedAt) || normalizeRelativeKoreanDate(video.relativeDate);
+    const publishedAt = normalizeDate(watchMeta.publishedAt) || normalizeRelativeDate(video.relativeDate);
     return makeFeedItem({
       source: source.source,
       sourceLabel: source.label,
@@ -340,19 +340,20 @@ async function fetchWatchPageMeta(videoId) {
   }
 }
 
-function normalizeRelativeKoreanDate(value) {
+export function normalizeRelativeDate(value, now = new Date()) {
   if (!value) return null;
   const text = String(value);
-  const match = text.match(/(\d+)\s*(분|시간|일|주|개월|년)\s*전/);
+  const match = text.match(/(\d+)\s*(분|시간|일|주|개월|년)\s*전/)
+    || text.match(/(\d+)\s*(minute|minutes|hour|hours|day|days|week|weeks|month|months|year|years)\s*ago/i);
   if (!match) return null;
   const amount = Number(match[1]);
-  const date = new Date();
-  const unit = match[2];
-  if (unit === '분') date.setMinutes(date.getMinutes() - amount);
-  if (unit === '시간') date.setHours(date.getHours() - amount);
-  if (unit === '일') date.setDate(date.getDate() - amount);
-  if (unit === '주') date.setDate(date.getDate() - amount * 7);
-  if (unit === '개월') date.setMonth(date.getMonth() - amount);
-  if (unit === '년') date.setFullYear(date.getFullYear() - amount);
+  const date = new Date(now);
+  const unit = match[2].toLowerCase();
+  if (unit === '분' || unit.startsWith('minute')) date.setMinutes(date.getMinutes() - amount);
+  if (unit === '시간' || unit.startsWith('hour')) date.setHours(date.getHours() - amount);
+  if (unit === '일' || unit.startsWith('day')) date.setDate(date.getDate() - amount);
+  if (unit === '주' || unit.startsWith('week')) date.setDate(date.getDate() - amount * 7);
+  if (unit === '개월' || unit.startsWith('month')) date.setMonth(date.getMonth() - amount);
+  if (unit === '년' || unit.startsWith('year')) date.setFullYear(date.getFullYear() - amount);
   return date.toISOString();
 }
