@@ -114,6 +114,7 @@ async function fetchYouTubeVideosFallback(cause) {
         fallbackDescription,
         thumbnailUrl: video.thumbnailUrl,
         fallback: 'channel-videos-html',
+        rssStatus: cause.status || null,
         rssError: cause.message,
         watchMeta
       }
@@ -236,17 +237,11 @@ function getThumbnailUrl(value) {
 
 function logYouTubeMetadata(parserUsed, items, cause = null) {
   const item = items[0] || null;
+  const rssStatus = cause?.status || (parserUsed === 'rss' ? 200 : 'unavailable');
   const titlePresent = Boolean(item?.title && !/^\d+$/.test(item.title));
   const publishedAtPresent = Boolean(item?.publishedAt);
   const descriptionLength = item?.summary?.length || 0;
-  const rssError = cause ? ` rssError=${compactLogValue(cause.message)}` : '';
-  console.log(`YOUTUBE metadata parserUsed=${parserUsed} titlePresent=${titlePresent} publishedAtPresent=${publishedAtPresent} descriptionLength=${descriptionLength}${rssError}`);
-}
-
-function compactLogValue(value) {
-  return String(value || '')
-    .replace(/\s+/g, '_')
-    .slice(0, 180);
+  console.log(`YOUTUBE metadata rssStatus=${rssStatus} parserUsed=${parserUsed} titlePresent=${titlePresent} publishedAtPresent=${publishedAtPresent} descriptionLength=${descriptionLength}`);
 }
 
 function sleep(ms) {
