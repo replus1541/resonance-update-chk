@@ -6,12 +6,12 @@ import { stripHtml, truncate, compactTitle } from '../utils/text.js';
 import { makeFeedItem } from './item.js';
 
 const CHANNEL_URL = 'https://www.youtube.com/@resonanceKR';
+const CHANNEL_HANDLE = 'resonanceKR';
 
-let cachedChannelId = null;
+let cachedRssUrl = null;
 
 export async function fetchYouTubePage() {
-  const channelId = await getChannelId();
-  const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`;
+  const rssUrl = await getRssUrl();
   let entries = [];
   try {
     const xml = await fetchText(rssUrl, {
@@ -35,33 +35,48 @@ export async function fetchYouTubePage() {
   }
 
   const source = SOURCES.YOUTUBE;
+  const items = entries.map((entry) => normalizeYouTubeRssEntry(entry, source));
+  logYouTubeMetadata('rss', items);
   return {
-    items: entries.map((entry) => {
-      const videoId = entry?.['yt:videoId'] || entry?.videoId || entry?.id?.split(':').pop();
-      const title = compactTitle(entry?.title, 'YouTube video');
-      const url = videoId ? `https://www.youtube.com/watch?v=${videoId}` : getLink(entry?.link) || CHANNEL_URL;
-      const summary = truncate(stripHtml(entry?.['media:group']?.['media:description'] || entry?.summary || ''), 480);
-      return makeFeedItem({
-        source: source.source,
-        sourceLabel: source.label,
-        sourceItemId: videoId || url,
-        type: inferYouTubeType(title, url),
-        category: inferCategory(title, summary),
-        title,
-        summary,
-        url,
-        publishedAt: normalizeDate(entry?.published),
-        author: entry?.author?.name || source.label,
-        boardName: null,
-        attachments: {
-          imageCount: entry?.['media:group']?.['media:thumbnail'] ? 1 : 0,
-          hasVideo: true
-        },
-        raw: entry
-      });
-    }),
+    items,
     nextCursor: null
   };
+}
+
+export function normalizeYouTubeRssEntry(entry, source = SOURCES.YOUTUBE) {
+  const videoId = extractVideoId(entry);
+  const url = getLink(entry?.link) || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : CHANNEL_URL);
+  const title = compactTitle(firstUsableText(entry?.title, entry?.['media:group']?.['media:title']), videoId ? `YouTube video ${videoId}` : 'YouTube video');
+  const description = readText(entry?.['media:group']?.['media:description'])
+    || readText(entry?.summary)
+    || readText(entry?.content)
+    || '';
+  const summary = truncate(stripHtml(description), 480);
+  const publishedAt = normalizeDate(entry?.published) || normalizeDate(entry?.updated);
+  const thumbnailUrl = getThumbnailUrl(entry?.['media:group']?.['media:thumbnail']);
+
+  return makeFeedItem({
+    source: source.source,
+    sourceLabel: source.label,
+    sourceItemId: videoId || url,
+    type: inferYouTubeType(title, url),
+    category: inferCategory(title, summary),
+    title,
+    summary,
+    url,
+    publishedAt,
+    author: readText(entry?.author?.name) || source.label,
+    boardName: CHANNEL_HANDLE,
+    attachments: {
+      imageCount: thumbnailUrl ? 1 : 0,
+      hasVideo: true
+    },
+    raw: {
+      ...entry,
+      parserUsed: 'rss',
+      thumbnailUrl
+    }
+  });
 }
 
 async function fetchYouTubeVideosFallback(cause) {
@@ -72,80 +87,74 @@ async function fetchYouTubeVideosFallback(cause) {
   });
   const source = SOURCES.YOUTUBE;
   const videos = extractVideosFromInitialData(html).slice(0, 30);
+  const items = await Promise.all(videos.map(async (video) => {
+    const videoId = video.videoId;
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    const watchMeta = await fetchWatchPageMeta(videoId);
+    const title = compactTitle(firstUsableText(watchMeta.title, video.title), `YouTube video ${videoId}`);
+    const fallbackDescription = stripHtml(watchMeta.description || video.description || '');
+    const publishedAt = normalizeDate(watchMeta.publishedAt) || normalizeRelativeKoreanDate(video.relativeDate);
+    return makeFeedItem({
+      source: source.source,
+      sourceLabel: source.label,
+      sourceItemId: videoId,
+      type: inferYouTubeType(title, url),
+      category: inferCategory(title, fallbackDescription),
+      title,
+      summary: truncate(fallbackDescription, 480),
+      url,
+      publishedAt,
+      author: watchMeta.author || source.label,
+      boardName: CHANNEL_HANDLE,
+      attachments: {
+        imageCount: video.thumbnailUrl ? 1 : 0,
+        hasVideo: true
+      },
+      raw: {
+        videoId,
+        parserUsed: 'html-fallback',
+        fallbackTitle: video.title,
+        fallbackRelativeTime: video.relativeDate,
+        fallbackDescription,
+        thumbnailUrl: video.thumbnailUrl,
+        fallback: 'channel-videos-html',
+        rssError: cause.message,
+        watchMeta
+      }
+    });
+  }));
+  logYouTubeMetadata('html-fallback', items);
   return {
-    items: await Promise.all(videos.map(async (video) => {
-      const videoId = video.videoId;
-      const url = `https://www.youtube.com/watch?v=${videoId}`;
-      const watchMeta = await fetchWatchPageMeta(videoId);
-      const title = watchMeta.title || video.title || `YouTube video ${videoId}`;
-      const publishedAt = normalizeDate(watchMeta.publishedAt) || normalizeRelativeKoreanDate(video.relativeDate);
-      return makeFeedItem({
-        source: source.source,
-        sourceLabel: source.label,
-        sourceItemId: videoId,
-        type: inferYouTubeType(title, url),
-        category: inferCategory(title),
-        title,
-        summary: truncate(video.relativeDate ? `YouTube fallback: ${video.relativeDate}` : `YouTube RSS fallback: ${cause.message}`, 240),
-        url,
-        publishedAt,
-        author: watchMeta.author || source.label,
-        boardName: null,
-        attachments: {
-          imageCount: video.thumbnailUrl ? 1 : 0,
-          hasVideo: true
-        },
-        raw: {
-          videoId,
-          title: video.title,
-          relativeDate: video.relativeDate,
-          thumbnailUrl: video.thumbnailUrl,
-          fallback: 'channel-videos-html',
-          rssError: cause.message,
-          watchMeta
-        }
-      });
-    })),
+    items,
     nextCursor: null
   };
 }
 
-async function getChannelId() {
-  if (cachedChannelId) return cachedChannelId;
+async function getRssUrl() {
+  if (cachedRssUrl) return cachedRssUrl;
   const html = await fetchText(CHANNEL_URL, {
     headers: {
       accept: 'text/html,application/xhtml+xml'
     }
   });
-  const match = html.match(/"channelId":"(UC[^"]+)"/)
-    || html.match(/"externalId":"(UC[^"]+)"/)
-    || html.match(/<meta itemprop="channelId" content="(UC[^"]+)"/)
-    || html.match(/<link rel="canonical" href="https:\/\/www\.youtube\.com\/channel\/(UC[^"]+)"/);
-  if (!match) {
-    const candidates = [...new Set([...html.matchAll(/\b(UC[a-zA-Z0-9_-]{22})\b/g)].map((entry) => entry[1]))];
-    for (const candidate of candidates) {
-      if (await rssExists(candidate)) {
-        cachedChannelId = candidate;
-        return cachedChannelId;
-      }
-    }
+  const rssUrl = html.match(/"rssUrl":"([^"]+)"/)?.[1]?.replace(/\\u0026/g, '&');
+  if (rssUrl) {
+    cachedRssUrl = rssUrl;
+    return cachedRssUrl;
+  }
+
+  const candidates = [
+    html.match(/<meta itemprop="channelId" content="(UC[^"]+)"/)?.[1],
+    html.match(/<link rel="canonical" href="https:\/\/www\.youtube\.com\/channel\/(UC[^"]+)"/)?.[1],
+    html.match(/"externalId":"(UC[^"]+)"/)?.[1],
+    html.match(/"channelId":"(UC[^"]+)"/)?.[1]
+  ].filter(Boolean);
+  const channelId = candidates[0];
+  if (!channelId) {
     throw new Error('YouTube channelId not found from @resonanceKR page');
   }
-  cachedChannelId = match[1];
-  return cachedChannelId;
-}
-
-async function rssExists(channelId) {
-  try {
-    const xml = await fetchText(`https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`, {
-      headers: {
-        accept: 'application/rss+xml, application/xml, text/xml, */*'
-      }
-    });
-    return xml.includes('<feed') && xml.includes('<entry');
-  } catch {
-    return false;
-  }
+  cachedRssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`;
+  return cachedRssUrl;
 }
 
 function getLink(link) {
@@ -158,6 +167,60 @@ function getLink(link) {
 function asArray(value) {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
+}
+
+function readText(value) {
+  if (value == null) return '';
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (Array.isArray(value)) return value.map(readText).filter(Boolean).join(' ');
+  if (typeof value === 'object') {
+    if (typeof value['#text'] === 'string') return value['#text'];
+    if (typeof value.content === 'string') return value.content;
+    if (typeof value.text === 'string') return value.text;
+    if (Array.isArray(value.runs)) return value.runs.map((run) => readText(run?.text)).filter(Boolean).join('');
+  }
+  return '';
+}
+
+function firstUsableText(...values) {
+  for (const value of values) {
+    const text = stripHtml(readText(value));
+    if (text && !/^\d+$/.test(text)) return text;
+  }
+  return '';
+}
+
+function extractVideoId(entry) {
+  const fromField = readText(entry?.['yt:videoId'] || entry?.videoId);
+  if (fromField) return fromField;
+  const link = getLink(entry?.link);
+  if (link) {
+    try {
+      const parsed = new URL(link);
+      const videoId = parsed.searchParams.get('v');
+      if (videoId) return videoId;
+    } catch {
+      const match = link.match(/[?&]v=([^&]+)/);
+      if (match) return match[1];
+    }
+  }
+  const id = readText(entry?.id);
+  return id.split(':').pop() || null;
+}
+
+function getThumbnailUrl(value) {
+  if (!value) return null;
+  if (Array.isArray(value)) return value.map(getThumbnailUrl).find(Boolean) || null;
+  if (typeof value === 'object') return value['@_url'] || value.url || null;
+  return null;
+}
+
+function logYouTubeMetadata(parserUsed, items) {
+  const item = items[0] || null;
+  const titlePresent = Boolean(item?.title && !/^\d+$/.test(item.title));
+  const publishedAtPresent = Boolean(item?.publishedAt);
+  const descriptionLength = item?.summary?.length || 0;
+  console.log(`YOUTUBE metadata parserUsed=${parserUsed} titlePresent=${titlePresent} publishedAtPresent=${publishedAtPresent} descriptionLength=${descriptionLength}`);
 }
 
 function normalizeDate(value) {
@@ -258,6 +321,9 @@ async function fetchWatchPageMeta(videoId) {
     const title = html.match(/<meta name="title" content="([^"]+)"/)?.[1]
       || html.match(/"title":"([^"]+)"/)?.[1]
       || null;
+    const description = html.match(/<meta name="description" content="([^"]*)"/)?.[1]
+      || html.match(/"shortDescription":"((?:\\.|[^"])*)"/)?.[1]
+      || null;
     const publishedAt = html.match(/itemprop="datePublished" content="([^"]+)"/)?.[1]
       || html.match(/"publishDate":"([^"]+)"/)?.[1]
       || html.match(/"uploadDate":"([^"]+)"/)?.[1]
@@ -265,6 +331,7 @@ async function fetchWatchPageMeta(videoId) {
     const author = html.match(/"ownerChannelName":"([^"]+)"/)?.[1] || null;
     return {
       title: title ? decodeJsonString(title) : null,
+      description: description ? decodeJsonString(description) : null,
       publishedAt,
       author: author ? decodeJsonString(author) : null
     };

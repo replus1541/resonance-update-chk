@@ -5,10 +5,15 @@ export function toDiscordEmbed(item) {
     description: (item.summary || item.url).slice(0, 2048),
     color: colorForCategory(item.category),
     fields: [
-      { name: '출처', value: `${sourceLabel(item.source)} / ${item.category || '기타'}`, inline: false },
+      { name: '출처', value: sourceFieldValue(item), inline: false },
       { name: '작성일', value: formatKst(item.publishedAt), inline: false }
     ]
   };
+}
+
+function sourceFieldValue(item) {
+  if (item.source === 'YOUTUBE') return `${sourceLabel(item.source)} / ${item.boardName || 'resonanceKR'}`;
+  return `${sourceLabel(item.source)} / ${item.category || '기타'}`;
 }
 
 function sourceLabel(source) {

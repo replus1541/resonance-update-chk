@@ -7,7 +7,7 @@
   "scripts": {
     "check:updates": "node tools/check-updates.mjs",
     "test:notify": "node tools/send-test-notification.mjs",
-    "verify": "node --check src/collectors/common.js && node --check src/collectors/naver.js && node --check src/collectors/youtube.js && node --check src/notifier/discord.js && node --check tools/check-updates.mjs && node --check tools/send-test-notification.mjs && node --check tools/verify-new-items-fixture.mjs && node tools/verify-new-items-fixture.mjs"
+    "verify": "node --check src/collectors/common.js && node --check src/collectors/naver.js && node --check src/collectors/youtube.js && node --check src/notifier/discord.js && node --check tools/check-updates.mjs && node --check tools/send-test-notification.mjs && node --check tools/verify-new-items-fixture.mjs && node --check tools/verify-youtube-rss-fixture.mjs && node tools/verify-new-items-fixture.mjs && node tools/verify-youtube-rss-fixture.mjs"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
