@@ -14,11 +14,7 @@ export async function fetchYouTubePage() {
   const rssUrl = await getRssUrl();
   let entries = [];
   try {
-    const xml = await fetchText(rssUrl, {
-      headers: {
-        accept: 'application/rss+xml, application/xml, text/xml, */*'
-      }
-    });
+    const xml = await fetchYouTubeRssXml(rssUrl);
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: '@_',
@@ -130,6 +126,28 @@ async function fetchYouTubeVideosFallback(cause) {
   };
 }
 
+async function fetchYouTubeRssXml(rssUrl) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await fetchText(rssUrl, {
+        headers: {
+          accept: 'application/rss+xml, application/xml, text/xml, */*'
+        }
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt === 3 || !isRetryableRssError(error)) break;
+      await sleep(500 * attempt);
+    }
+  }
+  throw lastError;
+}
+
+function isRetryableRssError(error) {
+  return !error?.status || [429, 500, 502, 503, 504].includes(error.status);
+}
+
 async function getRssUrl() {
   if (cachedRssUrl) return cachedRssUrl;
   const html = await fetchText(CHANNEL_URL, {
@@ -229,6 +247,10 @@ function compactLogValue(value) {
   return String(value || '')
     .replace(/\s+/g, '_')
     .slice(0, 180);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function normalizeDate(value) {
